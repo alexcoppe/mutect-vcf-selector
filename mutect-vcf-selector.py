@@ -72,8 +72,9 @@ def main():
     parser = argparse.ArgumentParser(description="Select mutect variants")
 
     parser.add_argument('-f', '--vcf', action='store', help="vcf file", required=True)
-    parser.add_argument('-c', '--cosmic', action='store', help="vcf file with cosmic data", required=True)
+    parser.add_argument('-c', '--cosmic', action='store', help="VCF file with COSMIC data", required=True)
     parser.add_argument('-e', '--header', action='store_true', help="Show VCF's header", required=False)
+    parser.add_argument('-l', '--clinvar', action='store', help="VCF file with ClinVar data", required=False)
     args = parser.parse_args()
 
     cosmic_dictionary = build_cosmic_dictionary(args.cosmic)
@@ -88,12 +89,8 @@ def main():
                 if "##Mutect Version=" in line:
                     mutectVersion = "mutect2"
             else:
-                if mutectVersion == "mutect":
-                    if check_mutect_variant(line, cosmic_dictionary, mutectVersion) == 1:
-                        print line[:-1]
-                else:
-                    if check_mutect_variant(line, cosmic_dictionary, mutectVersion) == 1:
-                        print line[:-1]
+                if check_mutect_variant(line, cosmic_dictionary, mutectVersion) == 1:
+                    print line[:-1]
 
 if __name__ == "__main__":
     main()
