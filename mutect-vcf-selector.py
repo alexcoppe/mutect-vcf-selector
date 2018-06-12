@@ -44,16 +44,12 @@ class Cosmic_Mutation(Variant):
 
 
 def check_mutect_variant(variant_line, cosmic_dictionary, mutectVersion):
-    splitted_line = variant_line.split()
-    filters = splitted_line[6].split(";")
+    variant = Variant(variant_line)
+    filters = variant.filter.split(";")
     if "PASS" in filters:
         return 1
     if 'germline_risk' in filters or mutectVersion == "mutect":
-        chromosome = splitted_line[0]
-        position = splitted_line[1]
-        reference = splitted_line[3]
-        alternative = splitted_line[4]
-        identifier = chromosome + "," + position + "," + reference + "," + alternative
+        identifier = variant.chromosome + "," + variant.position + "," + variant.reference + "," + variant.alternative
         cosmic_entry = cosmic_dictionary.get(identifier)
         if cosmic_entry:
             if not cosmic_entry.is_snp:
