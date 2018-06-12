@@ -73,6 +73,7 @@ def main():
 
     parser.add_argument('-f', '--vcf', action='store', help="vcf file", required=True)
     parser.add_argument('-c', '--cosmic', action='store', help="vcf file with cosmic data", required=True)
+    parser.add_argument('-e', '--header', action='store_true', help="Show VCF's header", required=False)
     args = parser.parse_args()
 
     cosmic_dictionary = build_cosmic_dictionary(args.cosmic)
@@ -82,6 +83,8 @@ def main():
     with open(args.vcf, "r") as vcf:
         for line in vcf:
             if line.startswith("#"):
+                if args.header == True:
+                    print line[:-1]
                 if "##Mutect Version=" in line:
                     mutectVersion = "mutect2"
             else:
