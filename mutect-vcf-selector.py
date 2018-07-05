@@ -28,17 +28,21 @@ class Variant:
 class Cosmic_Mutation(Variant):
     def __init__(self,vcf_line):
         Variant.__init__(self, vcf_line,True)
-        self.info_dictionary = self.__get_info(self.info)
+        self.is_snp,self.gene = self.__get_info(self.info)
 
     def __get_info(self,info_string):
+        gene = None
         splitted_info = info_string.split(";")
         if "SNP" in splitted_info:
-            self.is_snp = True
+            is_snp = True
         else:
-            self.is_snp = False
+            is_snp = False
         p = re.compile('^GENE=(\S+?);')
         m = p.match(info_string)
-        self.gene = m.groups()[0]
+        if m:
+            gene = m.groups()[0]
+        return is_snp,gene
+
 
 
 
@@ -46,6 +50,7 @@ class Clinvar_Variant(Variant):
     def __init__(self,vcf_line):
         Variant.__init__(self, vcf_line,True)
         self.info_dictionary = self.__get_info(self.info)
+        self.clnsig = self.__get_info(self.info)
 
     def __get_info(self,info_string):
         splitted_info = info_string.split(";")
@@ -53,7 +58,8 @@ class Clinvar_Variant(Variant):
             p = re.compile('CLNSIG=(\S+)')
             m = p.match(element)
             if m:
-                self.clnsig = m.groups()[0].split('/')
+                return  m.groups()[0].split('/')
+        return []
 
 
 def check_mutect_variant_with_cosmic(variant_line, cosmic_dictionary, mutectVersion):
@@ -96,6 +102,28 @@ def build_variant_annotation_dictionary(file_name,db):
     f.close()
     return d
 
+
+def check_mutect_clinvar_within_variant(variant_line, mutectVersion, clnsig=["Pathogenic"]):
+    clinvar_variant = Clinvar_Variant(variant_line)
+    clinvar_filters = clinvar_variant.filter.split(";")
+    if "PASS" in clinvar_filters:
+        return 1
+    if sets.Set(clinvar_variant.clnsig).intersection(clnsig) :
+        return 1
+    return 0
+
+
+def check_mutect_cosmic_within_variant(variant_line, mutectVersion):
+    cosmic_mutation = Cosmic_Mutation(variant_line)
+    if True in [identifier.startswith("COS") for identifier in  cosmic_mutation.ID.split(";")]:
+        cosmic_filters = cosmic_mutation.filter.split(";")
+        if "PASS" in cosmic_filters:
+            return 1
+        if not cosmic_mutation.is_snp:
+            return 1
+    return 0
+ 
+ 
  
 
 def main():
@@ -134,7 +162,13 @@ def main():
                 if args.clinvar:
                     if check_mutect_variant_with_clinvar(line, clinvar_dictionary, mutectVersion, clinical_significance_value) == 1:
                         ok_by_clinvar = True
-                if ok_by_clinvar == True or ok_by_cosmic == True:
+                        
+                if not args.clinvar and not args.cosmic:
+                    if check_mutect_clinvar_within_variant(line, mutectVersion, clinical_significance_value) == 1:
+                        ok_by_clinvar = True
+                    if check_mutect_cosmic_within_variant(line, mutectVersion) == 1:
+                        ok_by_cosmic = True
+                if ok_by_cosmic == True or ok_by_clinvar == True:
                     print line[:-1]
 
 if __name__ == "__main__":
