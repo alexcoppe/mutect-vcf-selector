@@ -62,48 +62,8 @@ class Clinvar_Variant(Variant):
         return []
 
 
-def check_mutect_variant_with_cosmic(variant_line, cosmic_dictionary, mutectVersion):
-    variant = Variant(variant_line)
-    filters = variant.filter.split(";")
-    if "PASS" in filters:
-        return 1
-    if 'germline_risk' in filters or mutectVersion == "mutect":
-        identifier = variant.chromosome + "," + variant.position + "," + variant.reference + "," + variant.alternative
-        cosmic_entry = cosmic_dictionary.get(identifier)
-        if cosmic_entry:
-            if not cosmic_entry.is_snp:
-                return 1
-        return 0
 
-def check_mutect_variant_with_clinvar(variant_line, clinvar_dictionary, mutectVersion, clnsig=["Pathogenic"]):
-    variant = Variant(variant_line)
-    filters = variant.filter.split(";")
-    if "PASS" in filters:
-        return 1
-    clinvar_entry = clinvar_dictionary.get(variant.identifier)
-    if clinvar_entry == None:
-        return 0
-    else:
-        if sets.Set(clinvar_entry.clnsig).intersection(clnsig) :
-            return 1
-    return 0
-    
-
-def build_variant_annotation_dictionary(file_name,db):
-    f = open(file_name, "r")
-    d = {}
-    for line in f:
-        if not line.startswith("#"):
-            if db == "clinvar":
-                variant = Clinvar_Variant(line)
-            if db == "cosmic":
-                variant = Cosmic_Mutation(line)
-            d[variant.identifier] = variant
-    f.close()
-    return d
-
-
-def check_mutect_clinvar_within_variant(variant_line, mutectVersion, clnsig=["Pathogenic"]):
+def check_clinvar(variant_line, clnsig=["Pathogenic"]):
     clinvar_variant = Clinvar_Variant(variant_line)
     clinvar_filters = clinvar_variant.filter.split(";")
     if "PASS" in clinvar_filters:
@@ -113,7 +73,7 @@ def check_mutect_clinvar_within_variant(variant_line, mutectVersion, clnsig=["Pa
     return 0
 
 
-def check_mutect_cosmic_within_variant(variant_line, mutectVersion):
+def check_cosmic(variant_line):
     cosmic_mutation = Cosmic_Mutation(variant_line)
     if True in [identifier.startswith("COS") for identifier in  cosmic_mutation.ID.split(";")]:
         cosmic_filters = cosmic_mutation.filter.split(";")
@@ -124,52 +84,51 @@ def check_mutect_cosmic_within_variant(variant_line, mutectVersion):
     return 0
  
  
+def make_cancer_gene_census_dictionary(f):
+    genes = []
+    with open(f, "r") as cancer_gene_census_dictionary_file:
+        for line in cancer_gene_census_dictionary_file:
+            genes.append(line.split(",")[0])
+    return set(genes)
+
  
 
 def main():
     parser = argparse.ArgumentParser(description="Select mutect variants")
 
     parser.add_argument('-f', '--vcf', action='store', help="vcf file", required=True)
-    parser.add_argument('-c', '--cosmic', action='store', help="VCF file with COSMIC data", required=False)
     parser.add_argument('-e', '--header', action='store_true', help="Show VCF's header", required=False)
-    parser.add_argument('-l', '--clinvar', action='store', help="VCF file with ClinVar data", required=False)
     parser.add_argument('-s', '--clinical-significance-value', action='store', help="ClinVar's clinical significance value", required=False)
+    parser.add_argument('-c', '--cgc', action='store', help="The Cancer Gene Census (CGC) gene CSV file", required=True)
     args = parser.parse_args()
 
-    if args.clinvar:
-        clinvar_dictionary = build_variant_annotation_dictionary(args.clinvar, "clinvar")
-    if args.cosmic:
-        cosmic_dictionary = build_variant_annotation_dictionary(args.cosmic, "cosmic")
     if not args.clinical_significance_value:
-        clinical_significance_value = ["Likely_pathogenic", "Pathogenic", "drug_response", 
+        clinical_significance_value = ["Likely_pathogenic", "4", "Pathogenic", "5", "drug_response", "6", 
                 "association", "risk_factor", "protective"]
     else:
         clinical_significance_value = args.clinical_significance_value.split(",")
 
-    mutectVersion = "mutect"
+
+    cancer_gene_census_dictionary = make_cancer_gene_census_dictionary(args.cgc)
+
     with open(args.vcf, "r") as vcf:
         for line in vcf:
             ok_by_clinvar,ok_by_cosmic = False,False
             if line.startswith("#"):
                 if args.header == True:
                     print line[:-1]
-                if "##Mutect Version=" in line:
-                    mutectVersion = "mutect2"
             else:
-                if args.cosmic:
-                    if check_mutect_variant_with_cosmic(line, cosmic_dictionary, mutectVersion) == 1:
-                        ok_by_cosmic = True
-                if args.clinvar:
-                    if check_mutect_variant_with_clinvar(line, clinvar_dictionary, mutectVersion, clinical_significance_value) == 1:
-                        ok_by_clinvar = True
-                        
-                if not args.clinvar and not args.cosmic:
-                    if check_mutect_clinvar_within_variant(line, mutectVersion, clinical_significance_value) == 1:
-                        ok_by_clinvar = True
-                    if check_mutect_cosmic_within_variant(line, mutectVersion) == 1:
-                        ok_by_cosmic = True
-                if ok_by_cosmic == True or ok_by_clinvar == True:
+                variant = Variant(line)
+                variant_gene_name = variant.info.split("|")[3]
+                if check_clinvar(line, clinical_significance_value) == 1:
+                    ok_by_clinvar = True
+                if check_cosmic(line) == 1:
+                    ok_by_cosmic = True
+                if variant.filter == "PASS":
                     print line[:-1]
+                elif ok_by_cosmic == True or ok_by_clinvar == True:
+                    if variant_gene_name in cancer_gene_census_dictionary:
+                        print line[:-1]
 
 if __name__ == "__main__":
     main()
