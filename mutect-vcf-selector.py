@@ -98,6 +98,7 @@ def main():
 
     parser.add_argument('-f', '--vcf', action='store', help="vcf file", required=True)
     parser.add_argument('-e', '--header', action='store_true', help="Show VCF's header", required=False)
+    parser.add_argument('-s', '--clinical-significance-value', action='store', help="ClinVar's clinical significance value", required=False)
     parser.add_argument('-c', '--cgc', action='store', help="The Cancer Gene Census (CGC) gene CSV file", required=True)
     args = parser.parse_args()
 
