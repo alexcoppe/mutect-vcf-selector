@@ -58,17 +58,22 @@ class Clinvar_Variant(Variant):
             p = re.compile('CLNSIG=(\S+)')
             m = p.match(element)
             if m:
+                clnsig_data = m.groups()[0]
+                if "|" in clnsig_data:
+                    clnsig_data =  m.groups()[0].split('|')
+                else:
+                    clnsig_data =  m.groups()[0].split('/')
                 return  m.groups()[0].split('/')
         return []
 
 
 
-def check_clinvar(variant_line, clnsig=["Pathogenic"]):
+def check_clinvar(variant_line, required_clnsig=["Pathogenic"]):
     clinvar_variant = Clinvar_Variant(variant_line)
     clinvar_filters = clinvar_variant.filter.split(";")
     if "PASS" in clinvar_filters:
         return 1
-    if sets.Set(clinvar_variant.clnsig).intersection(clnsig) :
+    if sets.Set(clinvar_variant.clnsig).intersection(required_clnsig) :
         return 1
     return 0
 
@@ -92,6 +97,13 @@ def make_cancer_gene_census_dictionary(f):
     return set(genes)
 
  
+def get_normal_AD(line, normal_position):
+    normal_data = line.split()[normal_position]
+    normal_AD = normal_data.split(":")[1].split(",")
+    if '0' not in normal_AD:
+        return False
+    else:
+        return True
 
 def main():
     parser = argparse.ArgumentParser(description="Select mutect variants")
@@ -117,18 +129,29 @@ def main():
             if line.startswith("#"):
                 if args.header == True:
                     print line[:-1]
+            if line.startswith("#"):
+                line_without_hash = line[2:]
+                if line_without_hash.startswith("normal_sample="):
+                    sample_name = line_without_hash[14:-1]
+                if line_without_hash.startswith("HROM"):
+                    splitted_line = line_without_hash.split()
+                    normal_position = splitted_line.index(sample_name)
             else:
                 variant = Variant(line)
                 variant_gene_name = variant.info.split("|")[3]
                 if check_clinvar(line, clinical_significance_value) == 1:
+                    #print "Clinvar"
                     ok_by_clinvar = True
                 if check_cosmic(line) == 1:
                     ok_by_cosmic = True
+                    #print "Cosmic"
                 if variant.filter == "PASS":
+                    print "PASS"
                     print line[:-1]
                 elif ok_by_cosmic == True or ok_by_clinvar == True:
                     if variant_gene_name in cancer_gene_census_dictionary:
-                        print line[:-1]
+                        if get_normal_AD(line,normal_position) == True:
+                            print line[:-1]
 
 if __name__ == "__main__":
     main()
