@@ -131,8 +131,16 @@ def main():
                     print line[:-1]
             if line.startswith("#"):
                 line_without_hash = line[2:]
+
+                # Mutect version
+                for word in line_without_hash.split():
+                    if word.startswith("normal_sample_name="):
+                        sample_name = word[19:]
+
+                # Mutect 2 version
                 if line_without_hash.startswith("normal_sample="):
                     sample_name = line_without_hash[14:-1]
+
                 if line_without_hash.startswith("HROM"):
                     splitted_line = line_without_hash.split()
                     normal_position = splitted_line.index(sample_name)
@@ -146,7 +154,7 @@ def main():
                     ok_by_cosmic = True
                     #print "Cosmic"
                 if variant.filter == "PASS":
-                    print "PASS"
+                    #print "PASS"
                     print line[:-1]
                 elif ok_by_cosmic == True or ok_by_clinvar == True:
                     if variant_gene_name in cancer_gene_census_dictionary:
